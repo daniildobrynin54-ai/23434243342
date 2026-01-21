@@ -1,4 +1,4 @@
-"""Объединенный обработчик Telegram бота v2 - с профилями и улучшенной регистрацией."""
+"""Объединенный обработчик Telegram бота v2 - ИСПРАВЛЕНО."""
 
 import threading
 import time
@@ -49,6 +49,7 @@ class TelegramUnifiedHandler:
         self.sheets_parser = get_sheets_parser(None)
         self.user_states = {}
         
+        # Валидатор клуба
         self.validator = None
         if boost_url and session:
             self.validator = create_club_validator(
@@ -62,7 +63,7 @@ class TelegramUnifiedHandler:
                 logger.info("✅ Валидатор клуба инициализирован")
         
         self.proxies = None
-        logger.info("Telegram unified handler работает БЕЗ прокси (прямое подключение)")
+        logger.info("Telegram unified handler работает БЕЗ прокси")
         
         self._test_connection()
     
@@ -245,9 +246,10 @@ class TelegramUnifiedHandler:
         logger.info(f"Показан список профилей для {chat_id}")
     
     def show_profile(self, chat_id: int, callback_query_id: str, user_id: str) -> None:
-        """Показывает профиль из Google Sheets."""
+        """🔧 ИСПРАВЛЕНО: Показывает профиль из Google Sheets."""
         logger.info(f"📊 Загрузка профиля {user_id} для {chat_id}")
         
+        # Загружаем профиль из таблицы
         profile = self.sheets_parser.parse_profile(user_id)
         
         if not profile:
@@ -258,6 +260,7 @@ class TelegramUnifiedHandler:
             )
             return
         
+        # Форматируем сообщение
         message = self.sheets_parser.format_profile_message(profile)
         
         self.answer_callback_query(callback_query_id)
@@ -280,11 +283,6 @@ class TelegramUnifiedHandler:
                 break
         
         if not account:
-            self.answer_callback_query(
-                message_id,
-                "❌ Аккаунт не найден",
-                show_alert=True
-            )
             return
         
         username = account['username']
@@ -395,6 +393,7 @@ class TelegramUnifiedHandler:
         """Обрабатывает привязку через кнопку."""
         self.answer_callback_query(callback_query_id)
         
+        # Валидация
         if self.validator:
             user_id = self.users_db.extract_id_from_url(url)
             
@@ -419,6 +418,7 @@ class TelegramUnifiedHandler:
             
             logger.info(f"✅ Валидация пройдена для {user_id}")
         
+        # Регистрация
         success, message = self.users_db.register_account(
             chat_id,
             telegram_username,
@@ -451,6 +451,7 @@ class TelegramUnifiedHandler:
             self.send_message(chat_id, "❌ Неверный формат ссылки")
             return
         
+        # Загружаем профиль
         profile = self.sheets_parser.parse_profile(user_id)
         
         if not profile:
@@ -478,8 +479,10 @@ class TelegramUnifiedHandler:
         
         logger.info(f"📩 Callback от {chat_id}: {callback_data}")
         
+        # Обновляем telegram username
         self.users_db.update_telegram_username(chat_id, telegram_username)
         
+        # Обработка действий с ссылками
         if callback_data.startswith("link_add:"):
             url = callback_data.replace("link_add:", "")
             self.process_link_add(chat_id, telegram_username, callback_id, url)
@@ -488,19 +491,23 @@ class TelegramUnifiedHandler:
             url = callback_data.replace("link_view:", "")
             self.process_link_view(chat_id, callback_id, url)
         
+        # Просмотр профиля
         elif callback_data.startswith("profile:"):
             user_id = callback_data.split(":", 1)[1]
             self.show_profile(chat_id, callback_id, user_id)
         
+        # Назад к списку уведомлений
         elif callback_data == "back_to_notif":
             self.answer_callback_query(callback_id)
             self.show_notifications_list(chat_id)
         
+        # Открыть настройки уведомлений
         elif callback_data.startswith("notif:"):
             user_id = callback_data.split(":", 1)[1]
             self.answer_callback_query(callback_id)
             self.show_notification_settings(chat_id, message_id, user_id)
         
+        # Изменить тип уведомлений
         elif callback_data.startswith("set_notif:"):
             parts = callback_data.split(":")
             if len(parts) == 3:
@@ -510,7 +517,7 @@ class TelegramUnifiedHandler:
                 self.set_notification_type_via_button(
                     chat_id,
                     message_id,
-                    callback_query_id,
+                    callback_id,
                     user_id,
                     notification_type
                 )
@@ -528,7 +535,7 @@ class TelegramUnifiedHandler:
         text = text.strip()
         logger.info(f"📩 Команда от {telegram_username or first_name} ({chat_id}): {text[:50]}")
         
-        # === /start ===
+        # /start
         if text.startswith('/start'):
             self.send_message(
                 chat_id,
@@ -548,7 +555,7 @@ class TelegramUnifiedHandler:
                 "/help - Помощь"
             )
         
-        # === /add ===
+        # /add
         elif text.startswith('/add'):
             parts = text.split(maxsplit=1)
             
@@ -565,6 +572,7 @@ class TelegramUnifiedHandler:
             
             url = parts[1].strip()
             
+            # Валидация
             if self.validator:
                 user_id = self.users_db.extract_id_from_url(url)
                 
@@ -592,6 +600,7 @@ class TelegramUnifiedHandler:
                 
                 logger.info(f"✅ Валидация пройдена для {user_id}")
             
+            # Регистрация
             success, message = self.users_db.register_account(
                 chat_id,
                 telegram_username,
@@ -609,15 +618,15 @@ class TelegramUnifiedHandler:
             self.send_message(chat_id, message)
             logger.info(f"{'✅' if success else '❌'} Регистрация: {telegram_username} -> {url[:50]}")
         
-        # === /notifications (бывший /list) ===
+        # /notifications
         elif text.startswith('/notifications') or text.startswith('/list'):
             self.show_notifications_list(chat_id)
         
-        # === /profile ===
+        # /profile
         elif text.startswith('/profile'):
             self.show_profile_list(chat_id)
         
-        # === /remove ===
+        # /remove
         elif text.startswith('/remove'):
             parts = text.split()
             
@@ -647,7 +656,7 @@ class TelegramUnifiedHandler:
                 
                 self.send_message(chat_id, "\n".join(lines))
         
-        # === /help ===
+        # /help
         elif text.startswith('/help'):
             self.send_message(
                 chat_id,
@@ -671,7 +680,7 @@ class TelegramUnifiedHandler:
                 "/remove - Удалить аккаунт"
             )
         
-        # === ССЫЛКА БЕЗ КОМАНДЫ ===
+        # Ссылка без команды
         elif not text.startswith('/'):
             user_id = self.users_db.extract_id_from_url(text)
             
@@ -684,7 +693,7 @@ class TelegramUnifiedHandler:
                     "Используйте /help для списка команд"
                 )
         
-        # === НЕИЗВЕСТНАЯ КОМАНДА ===
+        # Неизвестная команда
         else:
             self.send_message(
                 chat_id,
@@ -779,19 +788,13 @@ class TelegramUnifiedHandler:
                 first_name = from_user.get('first_name', 'Unknown')
                 text = message.get('text', '')
                 
-                # 🔧 ИСПРАВЛЕНО: Обрабатываем команды в личке даже если text пустой
-                if not chat_id:
+                if not chat_id or not text:
                     continue
                 
                 if chat_type == 'private':
-                    if text:
-                        self.process_command(chat_id, telegram_username, first_name, text)
-                    continue
+                    self.process_command(chat_id, telegram_username, first_name, text)
                 
                 elif chat_id_str == self.chat_id:
-                    if not text:
-                        continue
-                        
                     if self.thread_id:
                         message_thread_id = message.get('message_thread_id')
                         if message_thread_id != self.thread_id:
@@ -855,6 +858,7 @@ class TelegramUnifiedHandler:
             self.thread.join(timeout=5)
         
         logger.info("✅ Unified handler остановлен")
+
 
 _unified_handler: Optional[TelegramUnifiedHandler] = None
 
