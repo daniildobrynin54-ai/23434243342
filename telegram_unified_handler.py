@@ -876,7 +876,6 @@ class TelegramUnifiedHandler:
         
         logger.info("✅ Unified handler остановлен")
 
-
 _unified_handler: Optional[TelegramUnifiedHandler] = None
 
 
