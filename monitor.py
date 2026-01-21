@@ -212,6 +212,12 @@ class BoostMonitor:
                 print(f"   Новая карта ID: {new_card_id}\n")
                 logger.info(f"Новая карта ID: {new_card_id}")
                 
+                # 🔧 ИСПРАВЛЕНО: Отменяем обмены ПОСЛЕ обнаружения новой карты
+                print("🔄 Отменяем обмены на старую карту...")
+                logger.info("🔄 Отменяем обмены на старую карту после смены карты...")
+                self._cancel_pending_trades()
+                time.sleep(1)
+                
                 self._send_telegram_notification(new_boost_card)
                 self._print_card_info(new_boost_card, new_instance_id, is_new=True)
                 self._save_boost_card(new_boost_card)
