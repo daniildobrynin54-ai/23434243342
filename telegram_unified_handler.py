@@ -31,7 +31,7 @@ class TelegramUnifiedHandler:
         chat_id: str,
         thread_id: Optional[int],
         on_replace_triggered: Optional[Callable] = None,
-        proxy_manager=None,  # Оставляем для обратной совместимости
+        proxy_manager=None,
         boost_url: Optional[str] = None,
         session=None
     ):
@@ -46,13 +46,9 @@ class TelegramUnifiedHandler:
         self.users_db = get_users_db()
         self.bot_message_ids = set()
         
-        # 🔧 ИСПРАВЛЕНО: НЕ используем прокси для парсера Google Sheets
         self.sheets_parser = get_sheets_parser(None)
+        self.user_states = {}
         
-        # 🔧 НОВОЕ: Временные состояния пользователей
-        self.user_states = {}  # {chat_id: {'state': 'waiting_add', 'url': '...'}}
-        
-        # Валидатор клуба (использует session с прокси для MangaBuff)
         self.validator = None
         if boost_url and session:
             self.validator = create_club_validator(
@@ -60,12 +56,11 @@ class TelegramUnifiedHandler:
                 bot_token=bot_token,
                 boost_url=boost_url,
                 telegram_chat_id=chat_id,
-                proxy_manager=proxy_manager  # Прокси только для MangaBuff
+                proxy_manager=proxy_manager
             )
             if self.validator:
                 logger.info("✅ Валидатор клуба инициализирован")
         
-        # 🔧 ИСПРАВЛЕНО: НЕ используем прокси для Telegram API
         self.proxies = None
         logger.info("Telegram unified handler работает БЕЗ прокси (прямое подключение)")
         
@@ -75,7 +70,6 @@ class TelegramUnifiedHandler:
         """Тестирует подключение."""
         try:
             url = f"{self.api_url}/getMe"
-            # 🔧 БЕЗ прокси
             response = requests.get(url, timeout=10)
             
             if response.status_code == 200:
@@ -116,7 +110,6 @@ class TelegramUnifiedHandler:
             if reply_markup:
                 data["reply_markup"] = json.dumps(reply_markup)
             
-            # 🔧 БЕЗ прокси
             response = requests.post(url, json=data, timeout=10)
             
             if response.status_code == 200:
@@ -144,7 +137,6 @@ class TelegramUnifiedHandler:
                 "show_alert": show_alert
             }
             
-            # 🔧 БЕЗ прокси
             response = requests.post(url, json=data, timeout=10)
             return response.status_code == 200
         except Exception as e:
@@ -172,7 +164,6 @@ class TelegramUnifiedHandler:
             if reply_markup:
                 data["reply_markup"] = json.dumps(reply_markup)
             
-            # 🔧 БЕЗ прокси
             response = requests.post(url, json=data, timeout=10)
             return response.status_code == 200
         except Exception as e:
@@ -188,7 +179,7 @@ class TelegramUnifiedHandler:
         return any(keyword in text_lower for keyword in self.TRIGGER_KEYWORDS)
     
     def show_notifications_list(self, chat_id: int) -> None:
-        """🔧 ПЕРЕИМЕНОВАНО: /list → /notifications."""
+        """Показывает список уведомлений."""
         accounts = self.users_db.get_user_accounts(chat_id)
         
         if not accounts:
@@ -224,7 +215,7 @@ class TelegramUnifiedHandler:
         logger.info(f"Показан список из {len(accounts)} аккаунтов для {chat_id}")
     
     def show_profile_list(self, chat_id: int) -> None:
-        """🔧 НОВОЕ: Показывает список аккаунтов для просмотра профиля."""
+        """Показывает список аккаунтов для просмотра профиля."""
         accounts = self.users_db.get_user_accounts(chat_id)
         
         if not accounts:
@@ -254,10 +245,9 @@ class TelegramUnifiedHandler:
         logger.info(f"Показан список профилей для {chat_id}")
     
     def show_profile(self, chat_id: int, callback_query_id: str, user_id: str) -> None:
-        """🔧 НОВОЕ: Показывает профиль из Google Sheets."""
+        """Показывает профиль из Google Sheets."""
         logger.info(f"📊 Загрузка профиля {user_id} для {chat_id}")
         
-        # Загружаем профиль из таблицы
         profile = self.sheets_parser.parse_profile(user_id)
         
         if not profile:
@@ -268,7 +258,6 @@ class TelegramUnifiedHandler:
             )
             return
         
-        # Форматируем сообщение
         message = self.sheets_parser.format_profile_message(profile)
         
         self.answer_callback_query(callback_query_id)
@@ -370,7 +359,7 @@ class TelegramUnifiedHandler:
             logger.error(f"❌ Не удалось изменить тип: {message}")
     
     def ask_link_action(self, chat_id: int, url: str) -> None:
-        """🔧 НОВОЕ: Спрашивает что делать с ссылкой."""
+        """Спрашивает что делать с ссылкой."""
         keyboard = {
             "inline_keyboard": [
                 [
@@ -403,10 +392,9 @@ class TelegramUnifiedHandler:
         callback_query_id: str,
         url: str
     ) -> None:
-        """🔧 НОВОЕ: Обрабатывает привязку через кнопку."""
+        """Обрабатывает привязку через кнопку."""
         self.answer_callback_query(callback_query_id)
         
-        # Валидация
         if self.validator:
             user_id = self.users_db.extract_id_from_url(url)
             
@@ -431,7 +419,6 @@ class TelegramUnifiedHandler:
             
             logger.info(f"✅ Валидация пройдена для {user_id}")
         
-        # Регистрация
         success, message = self.users_db.register_account(
             chat_id,
             telegram_username,
@@ -455,7 +442,7 @@ class TelegramUnifiedHandler:
         callback_query_id: str,
         url: str
     ) -> None:
-        """🔧 НОВОЕ: Показывает профиль по ссылке."""
+        """Показывает профиль по ссылке."""
         self.answer_callback_query(callback_query_id)
         
         user_id = self.users_db.extract_id_from_url(url)
@@ -464,7 +451,6 @@ class TelegramUnifiedHandler:
             self.send_message(chat_id, "❌ Неверный формат ссылки")
             return
         
-        # Загружаем профиль
         profile = self.sheets_parser.parse_profile(user_id)
         
         if not profile:
@@ -492,10 +478,8 @@ class TelegramUnifiedHandler:
         
         logger.info(f"📩 Callback от {chat_id}: {callback_data}")
         
-        # Обновляем telegram username
         self.users_db.update_telegram_username(chat_id, telegram_username)
         
-        # 🔧 НОВОЕ: Обработка действий с ссылками
         if callback_data.startswith("link_add:"):
             url = callback_data.replace("link_add:", "")
             self.process_link_add(chat_id, telegram_username, callback_id, url)
@@ -504,23 +488,19 @@ class TelegramUnifiedHandler:
             url = callback_data.replace("link_view:", "")
             self.process_link_view(chat_id, callback_id, url)
         
-        # 🔧 НОВОЕ: Просмотр профиля
         elif callback_data.startswith("profile:"):
             user_id = callback_data.split(":", 1)[1]
             self.show_profile(chat_id, callback_id, user_id)
         
-        # Назад к списку уведомлений
         elif callback_data == "back_to_notif":
             self.answer_callback_query(callback_id)
             self.show_notifications_list(chat_id)
         
-        # Открыть настройки уведомлений
         elif callback_data.startswith("notif:"):
             user_id = callback_data.split(":", 1)[1]
             self.answer_callback_query(callback_id)
             self.show_notification_settings(chat_id, message_id, user_id)
         
-        # Изменить тип уведомлений
         elif callback_data.startswith("set_notif:"):
             parts = callback_data.split(":")
             if len(parts) == 3:
@@ -530,7 +510,7 @@ class TelegramUnifiedHandler:
                 self.set_notification_type_via_button(
                     chat_id,
                     message_id,
-                    callback_id,
+                    callback_query_id,
                     user_id,
                     notification_type
                 )
@@ -585,7 +565,6 @@ class TelegramUnifiedHandler:
             
             url = parts[1].strip()
             
-            # 🔧 ВАЛИДАЦИЯ
             if self.validator:
                 user_id = self.users_db.extract_id_from_url(url)
                 
@@ -613,7 +592,6 @@ class TelegramUnifiedHandler:
                 
                 logger.info(f"✅ Валидация пройдена для {user_id}")
             
-            # Регистрация
             success, message = self.users_db.register_account(
                 chat_id,
                 telegram_username,
@@ -695,14 +673,11 @@ class TelegramUnifiedHandler:
         
         # === ССЫЛКА БЕЗ КОМАНДЫ ===
         elif not text.startswith('/'):
-            # 🔧 НОВОЕ: Проверяем это ли ссылка
             user_id = self.users_db.extract_id_from_url(text)
             
             if user_id:
-                # Это ссылка - спрашиваем что делать
                 self.ask_link_action(chat_id, text)
             else:
-                # Не ссылка
                 self.send_message(
                     chat_id,
                     "❌ Неверный формат ссылки\n\n"
@@ -754,7 +729,6 @@ class TelegramUnifiedHandler:
                 "allowed_updates": ["message", "callback_query"]
             }
             
-            # 🔧 БЕЗ прокси
             response = requests.get(
                 url,
                 params=params,
@@ -805,13 +779,19 @@ class TelegramUnifiedHandler:
                 first_name = from_user.get('first_name', 'Unknown')
                 text = message.get('text', '')
                 
-                if not chat_id or not text:
+                # 🔧 ИСПРАВЛЕНО: Обрабатываем команды в личке даже если text пустой
+                if not chat_id:
                     continue
                 
                 if chat_type == 'private':
-                    self.process_command(chat_id, telegram_username, first_name, text)
+                    if text:
+                        self.process_command(chat_id, telegram_username, first_name, text)
+                    continue
                 
                 elif chat_id_str == self.chat_id:
+                    if not text:
+                        continue
+                        
                     if self.thread_id:
                         message_thread_id = message.get('message_thread_id')
                         if message_thread_id != self.thread_id:

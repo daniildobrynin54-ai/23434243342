@@ -146,7 +146,8 @@ class BlacklistManager:
         if current_mtime <= self.last_modified and self.blacklisted_ids:
             return False
         
-        logger.info(f"🔄 Перезагрузка черного списка...")
+        # 🔧 ИСПРАВЛЕНО: Используем DEBUG вместо INFO чтобы не спамить
+        logger.debug(f"🔄 Перезагрузка черного списка...")
         
         data = self._load_from_file()
         blacklist_entries = data.get("blacklist", [])
